@@ -501,6 +501,15 @@ body.teacher{background:#0d1f22;overflow:auto;font-family:'Jua','Fredoka',sans-s
 .imgbtn.ub .badge{position:absolute;right:-8px;top:-6px;min-width:32px;height:32px;border-radius:16px;background:var(--teal-d);border:2px solid var(--teal-l);font-size:19px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-weight:700}
 .topbar{height:108px}
 #b-intent .intent{position:static}
+
+.tgate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(rgba(10,30,20,.55),rgba(10,30,20,.7)),var(--bg) center/cover;font-family:'Jua','Fredoka',sans-serif}
+.tgbox{width:100%;max-width:440px;background:linear-gradient(180deg,#fbf1d8,#f3e2bb);border:6px solid #5e3514;border-radius:26px;box-shadow:0 0 0 4px #6b9b3a,0 16px 30px rgba(0,0,0,.5);padding:28px 30px;text-align:center;color:#3a2412}
+.tgbox img{width:220px;margin:-10px auto 6px;display:block}
+.tgbox h2{font-size:30px;font-weight:400}.tgbox p{color:#7a5a36;font-size:18px;margin:4px 0 16px}
+.tgbox input{width:100%;height:60px;border-radius:16px;border:4px solid #c8a46a;font-size:26px;text-align:center;font-family:'Fredoka',sans-serif;outline:none;background:#fff}
+.tgbox input:focus{border-color:#2fae54}
+.tgerr{color:#c92a2a;min-height:26px;font-size:18px;margin-top:8px}
+.tgbtns{display:flex;gap:10px;justify-content:center;margin-top:6px}.tgbtns .wbtn{min-width:150px}
 </style>
 </head>
 <body class="student">
@@ -1747,8 +1756,26 @@ function teacherBoot() {
   $('#wrap').classList.add('hide'); $('#teacher').classList.remove('hide');
   $('#teacher').addEventListener('click', teacherClick);
   $('#teacher').addEventListener('change', ev => { if (ev.target.id === 't-file' && ev.target.files[0]) { uploadQ(ev.target.files[0]); ev.target.value = ''; } });
-  const last = ls.get('ecospire_teacher_room', null);
-  if (last) openRoom(last, true); else renderCreate();
+  teacherGate(() => { const last = ls.get('ecospire_teacher_room', null); if (last) openRoom(last, true); else renderCreate(); });
+}
+const T_PASS_HASH = 'badc6d68a3e8a3fac2859256a43d88c0e0c998a33956d88c0e68222fa6e3ddd0';
+async function sha256(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function teacherGate(next) {
+  let ok = false; try { ok = sessionStorage.getItem('ecospire_t_ok') === T_PASS_HASH; } catch (e) { }
+  if (ok) return next();
+  $('#teacher').innerHTML = `<div class="tgate" style="--bg:url(${img('bg_title')})"><form class="tgbox" id="tg-form" autocomplete="off">
+    <img src="${img('i_logo')}" alt=""><h2>교사용 관리 화면</h2><p>비밀번호를 입력해 주세요</p>
+    <input type="password" id="tg-pw" placeholder="비밀번호" autofocus>
+    <div class="tgerr" id="tg-err"></div>
+    <div class="tgbtns"><button type="button" class="wbtn" id="tg-back">학생 화면으로</button><button type="submit" class="wbtn g">들어가기</button></div></form></div>`;
+  $('#tg-back').onclick = () => { location.href = location.pathname; };
+  $('#tg-form').onsubmit = async ev => {
+    ev.preventDefault();
+    const h = await sha256('ecospire:' + $('#tg-pw').value);
+    if (h === T_PASS_HASH) { try { sessionStorage.setItem('ecospire_t_ok', h); } catch (e) { } $('#teacher').innerHTML = ''; next(); }
+    else { $('#tg-err').textContent = '비밀번호가 맞지 않아요.'; $('#tg-pw').value = ''; $('#tg-pw').focus(); }
+  };
+  setTimeout(() => { const i = $('#tg-pw'); if (i) i.focus(); }, 50);
 }
 function settingsForm(s) {
   s = { ...DEFAULT_SETTINGS, ...(s || {}) };
