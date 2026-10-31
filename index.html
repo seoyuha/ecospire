@@ -555,6 +555,10 @@ body.teacher{background:#0d1f22;overflow:auto;font-family:'Jua','Fredoka',sans-s
 .ctiles.n4 .ctile{padding-right:30px;gap:6px}.ctiles.n4 .ctile img{width:44px;height:44px}.ctiles.n4 .ctile b{font-size:18px;white-space:nowrap}.ctiles.n4 .ctile small{white-space:nowrap;font-size:13px}
 .clabel{width:150px}.cqset small{white-space:nowrap}
 .cbody .cnote.demo{padding-left:60px}
+button.cqset{cursor:pointer;text-align:left;font-family:'Jua',sans-serif;color:#3a2412}
+button.cqset:hover{border-color:#2fae54;background:#f4fff0}
+.cdel{width:46px;height:46px;flex:none;border-radius:12px;border:3px solid #d9a0a0;background:#fff3f3;font-size:20px;cursor:pointer}
+.clabel{width:160px}.clabel span{word-break:keep-all}
 </style>
 </head>
 <body class="student">
@@ -1800,7 +1804,8 @@ function teacherBoot() {
   document.body.className = 'teacher';
   $('#wrap').classList.add('hide'); $('#teacher').classList.remove('hide');
   $('#teacher').addEventListener('click', teacherClick);
-  $('#teacher').addEventListener('change', ev => { if (ev.target.id === 't-file' && ev.target.files[0]) { uploadQ(ev.target.files[0]); ev.target.value = ''; } });
+  $('#teacher').addEventListener('change', async ev => {
+    if (ev.target.id === 't-libpick' && ev.target.value) { const k = ev.target.value; const v = await DB.get(`${QLIB}/${k}`); ev.target.value = ''; if (v && v.list && confirm(`'${v.name}' 문제 ${v.list.length}개로 바꿀까요?`)) { await DB.set(`rooms/${T.room}/qset`, normQ(v.list)); await DB.update(`rooms/${T.room}/meta`, { unitName: v.name }); } return; } if (ev.target.id === 't-file' && ev.target.files[0]) { uploadQ(ev.target.files[0]); ev.target.value = ''; } });
   teacherGate(() => { const last = ls.get('ecospire_teacher_room', null); if (last) openRoom(last, true); else renderCreate(); });
 }
 const T_PASS_HASH = 'badc6d68a3e8a3fac2859256a43d88c0e0c998a33956d88c0e68222fa6e3ddd0';
@@ -1846,25 +1851,32 @@ function renderCreate() {
     <img class="chead" src="${C('header')}" alt="새 수업방 만들기">
     <div class="cbody">
       ${DB.demo ? `<div class="cnote demo">지금은 <b>체험 모드</b>예요. 같은 컴퓨터의 다른 탭에서만 학생으로 들어올 수 있어요.</div>` : ''}
-      <div class="cnote"><img src="${C('bulb')}" alt=""><div><b>6학년 영어 12단원 We Should Save the World 문제 41개</b>가 기본으로 들어 있어요.<br>방을 만든 뒤 '문제 관리'에서 엑셀로 바꿀 수 있어요.</div></div>
+      <div class="cnote"><img src="${C('bulb')}" alt=""><div><b>단원 선택</b>에서 기본 12단원(41문제)이나 내가 올린 문제 세트를 고를 수 있어요.<br>왼쪽 아래 <b>문제 세트 올리기</b>로 엑셀을 올리면 단원 목록에 추가돼요.</div></div>
       <div class="crow two">
-        <div class="cfield"><div class="clabel"><img src="${C('unit')}" alt=""><span>단원 선택</span></div><select id="s-unit"><option>6학년 영어 12단원</option></select></div>
+        <div class="cfield"><div class="clabel"><img src="${C('unit')}" alt=""><span>단원 선택</span></div><select id="s-unit"></select><button type="button" class="cdel hide" id="s-unit-del" title="이 문제 세트 지우기">🗑</button></div>
         <div class="cfield"><div class="clabel"><img src="${C('pencil')}" alt=""><span>방 이름</span></div><input id="s-class" placeholder="예) 6학년 1반 환경수호대" maxlength="20"></div>
       </div>
       ${settingsForm()}
       <div class="cbottom">
-        <div class="cqset"><img src="${C('folder')}" alt=""><div><b>문제 세트</b><small>방 생성 후 엑셀로 변경 가능</small></div><span>›</span></div>
+        <button type="button" class="cqset" id="cq-up"><img src="${C('folder')}" alt=""><div><b>문제 세트 올리기</b><small id="cq-name">방 생성 후 엑셀로 변경 가능</small></div><span>›</span></button>
         <button type="button" class="cimgbtn" id="t-create"><img src="${C('btn_create')}" alt="수업방 만들기"></button>
         <button type="button" class="cimgbtn" id="t-cancel"><img src="${C('btn_cancel')}" alt="취소"></button>
       </div>
     </div></div></div>`;
   $('#t-create').onclick = createRoom;
+  $('#cq-up').onclick = pickQFileForCreate;
+  $('#s-unit').onchange = unitChanged;
+  $('#s-unit-del').onclick = async () => { const v = $('#s-unit').value; if (!v.startsWith('lib:')) return; if (!confirm('이 문제 세트를 목록에서 지울까요? (이미 만든 방에는 영향 없어요)')) return; await DB.remove(`${QLIB}/${v.slice(4)}`); loadUnitOptions('u12'); };
+  loadUnitOptions('u12');
   $('#t-cancel').onclick = () => { if (hasRoom) { $('#teacher').innerHTML = ''; openRoom(T.room); } else location.href = location.pathname; };
 }
 async function createRoom() {
   const settings = readSettings();
+  const uv = ($('#s-unit') || {}).value || 'u12';
+  let qset = defaultQset(), unitName = '6학년 영어 12단원';
+  if (uv.startsWith('lib:')) { const s = await DB.get(`${QLIB}/${uv.slice(4)}`); if (s && s.list && s.list.length) { qset = normQ(s.list); unitName = s.name; } }
   let code; for (let k = 0; k < 20; k++) { code = String(rnd(10000, 99999)); if (!(await DB.get(`rooms/${code}/meta`))) break; }
-  await DB.set(`rooms/${code}`, { meta: { status: 'lobby', settings, className: ($('#s-class').value || '').trim().slice(0, 20) || '우리 반', created: Date.now(), resetAt: 0 }, qset: defaultQset() });
+  await DB.set(`rooms/${code}`, { meta: { status: 'lobby', settings, className: ($('#s-class').value || '').trim().slice(0, 20) || '우리 반', unitName, created: Date.now(), resetAt: 0 }, qset });
   openRoom(code);
 }
 function openRoom(code, resume) {
@@ -1935,6 +1947,12 @@ function renderTeacher() {
   if (T.tab === 'set') { if (!$('#s-acts')) pane.innerHTML = `<div class="wpanel">${woodTitle('gear', '게임 설정')}<div class="wbody"><p class="t-help">진행 범위와 층 수는 학생이 <b>새로 시작할 때</b> 적용되고, 나머지는 바로 적용돼요.</p>${settingsForm(m.settings)}<div style="margin-top:16px"><button class="wbtn g" data-t="saveset">설정 저장</button></div></div></div>`; }
   else pane.innerHTML = T.tab === 'dash' ? dashPane() : T.tab === 'rank' ? rankPane() : T.tab === 'live' ? livePane() : T.tab === 'items' ? `<div class="wpanel">${woodTitle('chart', '학습 분석')}<div class="wbody">${itemsPane()}</div></div>` : `<div class="wpanel">${woodTitle('book', '문제 관리')}<div class="wbody">${qsetPane()}</div></div>`;
   if (showRight) renderSum();
+  if (T.tab === 'qset') fillLibPick();
+}
+async function fillLibPick() {
+  const s = $('#t-libpick'); if (!s || s.dataset.done) return; s.dataset.done = 1;
+  const lib = (await DB.get(QLIB)) || {};
+  Object.entries(lib).sort((a, b) => (b[1].created || 0) - (a[1].created || 0)).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = `${v.name} (${v.n || (v.list || []).length}문제)`; s.appendChild(o); });
 }
 function classStats() {
   const L = Object.values(T.players), now = Date.now();
@@ -2029,9 +2047,10 @@ function qsetPane() {
   return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
     <button class="tb w" data-t="tpl">⬇ 엑셀 양식 받기</button>
     <label class="tb g" style="cursor:pointer">⬆ 엑셀/CSV 올리기<input type="file" id="t-file" accept=".xlsx,.xls,.csv" hidden></label>
-    <button class="tb" data-t="defq">기본 12단원 문제로 되돌리기</button></div>
+    <button class="tb" data-t="defq">기본 12단원 문제로 되돌리기</button>
+    <select class="tb w" id="t-libpick" style="min-width:240px"><option value="">저장된 문제 세트로 바꾸기…</option></select></div>
     <p class="t-help">엑셀 열 순서: <b>문제 | 우리말 도움말 | 정답 | 오답1 | 오답2 | 오답3 | 힌트</b> · 빈칸은 ___ (밑줄 3개)로 쓰세요. 바꾸면 학생들의 다음 미션부터 바로 적용돼요.</p>
-    <div style="font-size:20px;margin:10px 0">현재 문제 <b>${qs.length}</b>개</div>
+    <div style="font-size:20px;margin:10px 0">사용 중: <b>${esc((T.meta && T.meta.unitName) || '6학년 영어 12단원')}</b> · 문제 <b>${qs.length}</b>개</div>
     ${qs.map((q, i) => `<div class="t-q"><span class="n">${i + 1}</span><div style="flex:1"><b>${esc(q.q).replace(/\n/g, '<br>')}</b> <small style="color:#7a5a36">${esc(q.ko)}</small><br><span class="o">✔ ${esc(q.o[0])}</span> ${q.o.slice(1).map(o => `<span class="x">✗ ${esc(o)}</span>`).join(' ')}${q.h ? `<br><small>💡 ${esc(q.h)}</small>` : ''}</div></div>`).join('')}`;
 }
 function playerModal(k) {
@@ -2070,7 +2089,7 @@ async function teacherClick(ev) {
   }
   else if (a === 'new') { if (confirm('새 방을 만들까요? 지금 방은 그대로 남아요.')) { T.unsub.forEach(f => f()); T.unsub = []; $('#teacher').innerHTML = ''; renderCreate(); } }
   else if (a === 'saveset') { await DB.update(mp, { settings: readSettings() }); alert('설정을 저장했어요.'); }
-  else if (a === 'defq') { if (confirm('기본 12단원 문제 41개로 되돌릴까요?')) await DB.set(`rooms/${T.room}/qset`, defaultQset()); }
+  else if (a === 'defq') { if (confirm('기본 12단원 문제 41개로 되돌릴까요?')) { await DB.set(`rooms/${T.room}/qset`, defaultQset()); await DB.update(`rooms/${T.room}/meta`, { unitName: '6학년 영어 12단원' }); } }
   else if (a === 'tpl') downloadTemplate();
   else if (a === 'export') exportResults();
 }
@@ -2082,15 +2101,57 @@ async function downloadTemplate() {
   if (await needXLSX()) { const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = [{ wch: 40 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '문제'); XLSX.writeFile(wb, 'ECO_SPIRE_문제양식.xlsx'); }
   else downloadCSV('ECO_SPIRE_문제양식.csv', rows);
 }
-async function uploadQ(file) {
+async function parseQFile(file) {
   let rows = [];
   if (/\.csv$/i.test(file.name)) { const txt = await file.text(); rows = txt.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean).map(l => (l.match(/("([^"]|"")*"|[^,]*)(,|$)/g) || []).map(c => c.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'))); }
-  else { if (!(await needXLSX())) return alert('엑셀을 읽는 도구를 불러오지 못했어요. 인터넷 연결을 확인하거나 CSV로 올려 주세요.'); const wb = XLSX.read(await file.arrayBuffer()); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }); }
+  else { if (!(await needXLSX())) { alert('엑셀을 읽는 도구를 불러오지 못했어요. CSV로 올려 주세요.'); return null; } const wb = XLSX.read(await file.arrayBuffer()); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }); }
   if (rows.length && /문제/.test(String(rows[0][0]))) rows.shift();
   const list = rows.map((r, i) => ({ id: 'x' + (i + 1) + '_' + Date.now().toString(36), q: r[0], ko: r[1], o: [r[2], r[3], r[4], r[5]].map(s => String(s ?? '').trim()).filter(Boolean), h: r[6] })).filter(x => String(x.q || '').trim() && x.o.length >= 2);
+  return normQ(list);
+}
+const QLIB = 'library/qsets';
+async function saveToLibrary(list, file) {
+  const def = (file && file.name || '새 문제 세트').replace(/\.(xlsx|xls|csv)$/i, '');
+  const name = (prompt(`문제 ${list.length}개를 찾았어요.\n'단원 선택'에 보일 이름을 정해 주세요.`, def) || '').trim();
+  if (!name) return null;
+  const id = 's' + Date.now().toString(36);
+  await DB.set(`${QLIB}/${id}`, { name: name.slice(0, 30), n: list.length, created: Date.now(), list });
+  return { id, name };
+}
+async function uploadQ(file) {
+  const list = await parseQFile(file); if (!list) return;
   if (!list.length) return alert('문제를 찾지 못했어요. 양식의 열 순서를 확인해 주세요.');
-  if (!confirm(`문제 ${list.length}개를 찾았어요. 지금 문제 세트를 바꿀까요?`)) return;
-  await DB.set(`rooms/${T.room}/qset`, normQ(list)); T.tab = 'qset'; renderTeacher();
+  if (!confirm(`문제 ${list.length}개를 찾았어요. 이 방의 문제 세트를 바꿀까요?`)) return;
+  await DB.set(`rooms/${T.room}/qset`, list);
+  const nm = (T.meta && T.meta.unitName) || '';
+  if (confirm('이 문제 세트를 \'단원 선택\' 목록에도 저장할까요?\n(다음에 방을 만들 때 고를 수 있어요)')) { const s = await saveToLibrary(list, file); if (s) await DB.update(`rooms/${T.room}/meta`, { unitName: s.name }); }
+  T.tab = 'qset'; renderTeacher();
+}
+const BUILTIN_UNITS = [['u12', '6학년 영어 12단원 (기본 41문제)']];
+async function loadUnitOptions(selId) {
+  const sel = $('#s-unit'); if (!sel) return;
+  const lib = (await DB.get(QLIB)) || {};
+  const saved = Object.entries(lib).sort((a, b) => (b[1].created || 0) - (a[1].created || 0));
+  sel.innerHTML = `<optgroup label="기본 단원">${BUILTIN_UNITS.map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</optgroup>`
+    + (saved.length ? `<optgroup label="내가 올린 문제 세트">${saved.map(([k, s]) => `<option value="lib:${k}">${esc(s.name)} (${s.n || (s.list || []).length}문제)</option>`).join('')}</optgroup>` : '');
+  if (selId) sel.value = selId;
+  unitChanged();
+}
+function unitChanged() {
+  const v = ($('#s-unit') || {}).value || 'u12', del = $('#s-unit-del');
+  if (del) del.classList.toggle('hide', !v.startsWith('lib:'));
+  const lbl = $('#cq-name'); if (lbl) lbl.textContent = v.startsWith('lib:') ? '올린 문제 세트 사용 중' : '방 생성 후 엑셀로 변경 가능';
+}
+async function pickQFileForCreate() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const list = await parseQFile(f); if (!list) return;
+    if (!list.length) return alert('문제를 찾지 못했어요. 양식의 열 순서를 확인해 주세요.');
+    const s = await saveToLibrary(list, f); if (!s) return;
+    await loadUnitOptions('lib:' + s.id);
+  };
+  inp.click();
 }
 async function exportResults() {
   const L = tRank().sort((a, b) => a.rank - b.rank);
