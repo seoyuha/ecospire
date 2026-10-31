@@ -560,6 +560,7 @@ button.cqset:hover{border-color:#2fae54;background:#f4fff0}
 .cdel{width:46px;height:46px;flex:none;border-radius:12px;border:3px solid #d9a0a0;background:#fff3f3;font-size:20px;cursor:pointer}
 .clabel{width:160px}.clabel span{word-break:keep-all}
 #ovl ~ .toast{top:auto;bottom:24px}
+.toast.low{top:auto!important;bottom:24px}
 </style>
 </head>
 <body class="student">
@@ -1022,9 +1023,9 @@ const DEFAULT_SETTINGS = { acts: 1, floors: 7, diff: 'normal', missionEvery: 2, 
 
 function scr(id) { $$('.scr').forEach(s => s.classList.toggle('on', s.id === id)); closeOverlay(); }
 function setBg(el, key) { el.style.backgroundImage = `url(${img(key)})`; }
-function toast(html) { const t = document.createElement('div'); t.className = 'toast ko'; t.innerHTML = html; $('#stage').appendChild(t); setTimeout(() => t.remove(), 2700); }
+function toast(html) { const t = document.createElement('div'); t.className = 'toast ko' + ($('#ovl') ? ' low' : ''); t.innerHTML = html; $('#stage').appendChild(t); setTimeout(() => t.remove(), 2700); }
 function banner(text, ko) { const t = document.createElement('div'); t.className = 'banner' + (ko ? ' ko' : ''); t.textContent = text; $('#stage').appendChild(t); setTimeout(() => t.remove(), 1400); }
-function overlay(html, cls = '') { closeOverlay(); const o = document.createElement('div'); o.className = 'overlay ' + cls; o.id = 'ovl'; o.innerHTML = `<div class="dim"></div>${html}`; $('#stage').appendChild(o); return o; }
+function overlay(html, cls = '') { closeOverlay(); $$('.toast').forEach(x => x.classList.add('low')); const o = document.createElement('div'); o.className = 'overlay ' + cls; o.id = 'ovl'; o.innerHTML = `<div class="dim"></div>${html}`; $('#stage').appendChild(o); return o; }
 function closeOverlay() { const o = $('#ovl'); if (o) o.remove(); }
 function ribbon(text, icon = '') { return `<div class="ribbon"><img class="lf l" src="${img('i_leafdeco')}" alt=""><img class="lf r" src="${img('i_leafdeco')}" alt="">${icon}<span>${text}</span></div>`; }
 
